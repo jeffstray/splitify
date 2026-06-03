@@ -1,0 +1,20 @@
+{
+  "name": "splitify",
+  "version": "1.0.0",
+  "description": "Spotify Playlist CSV Splitter",
+  "type": "module",
+  "scripts": {
+    "dev": "npx http-server -p 3000",
+    "build": "echo 'Static HTML - no build needed'"
+  },
+  "keywords": [
+    "spotify",
+    "csv",
+    "playlist"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
