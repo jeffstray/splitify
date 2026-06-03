@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify Playlist CSV Splitter</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- JSZip for packaging multiple CSVs into a single ZIP archive -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  
+  <style>
+    body {
+      background-color: #0c0c0e;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .spotify-green { color: #1DB954; }
+    .bg-spotify-green { background-color: #1DB954; }
+    .bg-spotify-green:hover { background-color: #1ed760; }
+    .border-spotify { border-color: rgba(29, 185, 84, 0.3); }
+    .glass {
+      background: rgba(20, 20, 23, 0.7);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .input-focus:focus {
+      outline: none;
+      border-color: #1DB954;
+      box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.2);
+    }
+    .step-badge {
+      background: linear-gradient(135deg, #1DB954 0%, #199c46 100%);
+    }
+    /* Drag & Drop Highlight */
+    .drag-over {
+      border-color: #1DB954 !important;
+      background: rgba(29, 185, 84, 0.05) !important;
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-green-500 selection:text-black">
+
+  <!-- Main Container -->
+  <div class="flex-grow flex flex-col items-center px-4 py-8 md:py-12">
+    <div class="w-full max-w-3xl flex flex-col gap-8">
+      
+      <!-- Brand & Title -->
+      <header class="flex items-center justify-between border-b border-zinc-800 pb-6">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-850">
+            <i class="fa-solid fa-file-csv text-3xl spotify-green animate-pulse"></i>
+          </div>
+          <div>
+            <h1 class="text-2xl font-black text-white tracking-tight">SPLITIFY CSV</h1>
+            <p class="text-xs text-zinc-400">Smart Playlist Organizer by Artist, Genre, or Size</p>
+          </div>
+        </div>
+        
+        <!-- Auth Profile Badge -->
+        <div id="spotify-user-badge" class="hidden items-center gap-2.5 bg-zinc-900/80 px-3.5 py-1.5 rounded-full border border-zinc-800 text-xs">
+          <img id="user-avatar" class="w-5 h-5 rounded-full object-cover border border-zinc-700" src="https://placehold.co/40x40" alt="profile">
+          <span id="user-name" class="font-semibold text-zinc-200">Logged In</span>
+          <button id="disconnect-api-btn" class="text-zinc-500 hover:text-red-400 font-bold transition-colors ml-1 uppercase text-[9px] tracking-wider">Log Out</button>
+        </div>
+      </header>
+
+      <!-- STEP 1: Import CSV file -->
+      <section id="step-import" class="glass rounded-2xl p-6 md:p-8 flex flex-col gap-6">
+        <div class="flex items-center gap-4">
+          <div class="step-badge w-8 h-8 rounded-full flex items-center justify-center font-bold text-black">1</div>
+          <h2 class="text-lg font-bold text-white">Import Your Playlist CSV</h2>
+        </div>
+
+        <p class="text-xs text-zinc-400 leading-relaxed">
+          Upload any playlist CSV file exported from services like Exportify, Soundiiz, TuneMyMusic, or Spotify. This app preserves <strong>all original columns</strong> (track names, artists, links, custom IDs) and slices them up perfectly.
+        </p>
+
+        <!-- Drag and Drop Zone -->
+        <div id="drop-zone" class="border-2 border-dashed border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-zinc-700 transition-all text-center">
+          <i class="fa-solid fa-cloud-arrow-up text-5xl text-zinc-600 spotify-green"></i>
+          <div class="flex flex-col gap-1">
+            <span class="text-sm font-semibold text-white">Drag & drop your playlist CSV file here</span>
+            <span class="text-xs text-zinc-500">or click to browse from your device</span>
+          </div>
+          <input type="file" id="csv-file-input" accept=".csv, .txt" class="hidden">
+        </div>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-4 my-2 text-zinc-600 text-xs">
+          <div class="h-[1px] bg-zinc-800 flex-grow"></div>
+          <span>OR PASTE RAW CSV TEXT</span>
+          <div class="h-[1px] bg-zinc-800 flex-grow"></div>
+        </div>
+
+        <!-- Manual CSV Paste -->
+        <div class="flex flex-col gap-2">
+          <textarea id="csv-paste-area" rows="4" placeholder='Spotify URI,Track Name,Artist Name,Album Name&#10;spotify:track:4PTG3Z6ehGkBFSTzsIasg6,The Less I Know The Better,Tame Impala,Currents&#10;spotify:track:27T979A9jFWhm4Oa27tY6I,Selfless,The Strokes,The New Abnormal'
+            class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-300 font-mono input-focus transition-all resize-y"></textarea>
+        </div>
+
+        <div class="flex justify-between items-center">
+          <span class="text-[11px] text-zinc-500"><i class="fa-solid fa-circle-question mr-1"></i> First row must contain column headers.</span>
+          <button id="load-csv-btn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs transition-all flex items-center gap-2">
+            <i id="load-spinner" class="fa-solid fa-spinner animate-spin hidden"></i>
+            <span>Parse & Analyze Playlist</span>
+          </button>
+        </div>
+
+        <div id="api-error" class="hidden bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-xs text-red-400 flex items-center gap-3">
+          <i class="fa-solid fa-circle-exclamation text-sm"></i>
+          <span id="error-message">Error processing CSV file.</span>
+        </div>
+      </section>
+
+      <!-- STEP 2: Configure & Export Workspace -->
+      <section id="playlist-workspace" class="hidden flex-col gap-6">
+        
+        <!-- Playlist Info Summary -->
+        <div class="glass rounded-2xl p-6 flex flex-col sm:flex-row gap-5 items-start sm:items-center">
+          <div class="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-3xl text-zinc-500 font-mono">
+            CSV
+          </div>
+          <div class="flex-grow flex flex-col gap-1">
+            <span class="text-[10px] uppercase font-bold tracking-widest text-green-400">Import Successful</span>
+            <h3 id="meta-title" class="text-lg font-bold text-white">Loaded Master CSV</h3>
+            <p id="meta-info" class="text-xs text-zinc-400">Columns found: <span id="meta-columns" class="font-mono text-zinc-300 font-medium">None</span></p>
+            <div class="flex gap-2 mt-2 flex-wrap">
+              <span id="meta-tracks" class="text-xs bg-zinc-900 text-zinc-300 px-3 py-1 rounded-full border border-zinc-800 font-semibold">0 tracks parsed</span>
+              <span id="meta-artists" class="text-xs bg-zinc-900 text-zinc-300 px-3 py-1 rounded-full border border-zinc-800 font-semibold">0 unique artists</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Spotify Web API Enrichment Drawer (Shown when Spotify lookup is needed for Genres) -->
+        <div id="genre-api-auth-card" class="hidden glass rounded-2xl p-6 border-amber-500/20 bg-amber-500/[0.02] flex-col gap-4">
+          <div class="flex items-start gap-3">
+            <i class="fa-solid fa-circle-nodes text-amber-400 text-lg mt-0.5 animate-pulse"></i>
+            <div class="flex-grow">
+              <h4 class="text-sm font-bold text-amber-400">Missing Genre Metadata</h4>
+              <p class="text-xs text-zinc-300 mt-1 leading-relaxed">
+                Your CSV does not contain a "Genre" column. Connect your account to automatically batch-lookup each artist's official genres using the Spotify Web API.
+              </p>
+            </div>
+          </div>
+          
+          <!-- Auth action btn -->
+          <div class="flex items-center justify-between flex-wrap gap-3 mt-1.5 pt-3 border-t border-zinc-800/65">
+            <span class="text-[10px] text-zinc-500 font-mono">Uses secure direct client-side OAuth flow</span>
+            <button id="connect-spotify-btn" class="bg-spotify-green hover:scale-[1.01] text-black font-extrabold py-2 px-5 rounded-full text-xs transition-all flex items-center gap-1.5">
+              <i class="fa-brands fa-spotify text-sm"></i>
+              <span>Connect Spotify Web API</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Partition Preferences -->
+        <div class="glass rounded-2xl p-6 md:p-8 flex flex-col gap-6">
+          <div class="flex items-center gap-4">
+            <div class="step-badge w-8 h-8 rounded-full flex items-center justify-center font-bold text-black">2</div>
+            <h2 class="text-lg font-bold text-white">Configure Your Split Settings</h2>
+          </div>
+
+          <!-- Configuration Modes -->
+          <div class="flex flex-col gap-3">
+            <label class="text-xs font-bold uppercase tracking-wider text-zinc-400">Split Method</label>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 bg-zinc-950 p-1.5 rounded-xl border border-zinc-850">
+              <button id="mode-parts-btn" class="mode-select-btn py-2.5 text-[11px] md:text-xs font-bold rounded-lg transition-all bg-zinc-900 text-white border border-zinc-850">
+                Split Into N Files
+              </button>
+              <button id="mode-size-btn" class="mode-select-btn py-2.5 text-[11px] md:text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-zinc-200">
+                By Track Limits
+              </button>
+              <button id="mode-artist-btn" class="mode-select-btn py-2.5 text-[11px] md:text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-zinc-200">
+                By Artist
+              </button>
+              <button id="mode-genre-btn" class="mode-select-btn py-2.5 text-[11px] md:text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-zinc-200">
+                By Genre
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic Controls Area -->
+          <div class="bg-zinc-950/60 p-4 rounded-xl border border-zinc-900 flex flex-col gap-4">
+            
+            <!-- Input N Parts -->
+            <div id="container-parts-input" class="flex flex-col justify-end">
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs font-bold uppercase tracking-wider text-zinc-400">Number of Split Files</label>
+                <span id="slider-count-display" class="text-sm font-bold text-white bg-zinc-900 border border-zinc-800 px-3 py-1 rounded">4</span>
+              </div>
+              <input type="range" id="split-slider" min="2" max="20" value="4" class="w-full accent-green-500 h-2 bg-zinc-900 rounded-lg cursor-pointer">
+            </div>
+
+            <!-- Input Track limits -->
+            <div id="container-size-input" class="hidden flex-col justify-end">
+              <label class="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Max Tracks per Split File</label>
+              <input type="number" id="tracks-limit" min="1" max="1000" value="50" class="bg-zinc-900 border border-zinc-800 p-2.5 rounded-lg text-sm text-white focus:outline-none focus:border-green-500 font-mono">
+            </div>
+
+            <!-- Consolidated Threshold filters (Only for Artist / Genre Splitting) -->
+            <div id="container-threshold-input" class="hidden flex-col gap-2">
+              <div class="flex items-center justify-between mb-1">
+                <div>
+                  <label class="text-xs font-bold uppercase tracking-wider text-zinc-400 block">Grouping Threshold Filter</label>
+                  <span class="text-[10px] text-zinc-500 leading-tight block mt-0.5">Consolidates rare occurrences to avoid generating single-song files.</span>
+                </div>
+                <span id="threshold-count-display" class="text-sm font-bold text-white bg-zinc-900 border border-zinc-800 px-3 py-1 rounded">2 tracks</span>
+              </div>
+              <input type="range" id="threshold-slider" min="1" max="10" value="2" class="w-full accent-green-500 h-2 bg-zinc-900 rounded-lg cursor-pointer">
+            </div>
+
+            <!-- Dynamic Live Spotify Fetcher inside panel -->
+            <div id="container-spotify-fetcher" class="hidden flex-col gap-3">
+              <div class="flex justify-between items-center bg-zinc-900 p-3 rounded-lg border border-zinc-800">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-xs font-bold text-zinc-300">Spotify Cloud Synchronization</span>
+                  <span class="text-[11px] text-zinc-500" id="genre-fetch-status-text">Connect to map tracks to Spotify artist genres</span>
+                </div>
+                <button id="fetch-genres-btn" disabled class="bg-zinc-850 text-zinc-500 cursor-not-allowed font-bold py-2 px-4 rounded-lg text-xs transition-all flex items-center gap-1.5">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span>Fetch Genres</span>
+                </button>
+              </div>
+              <!-- Mini progress loader for genres -->
+              <div id="genre-fetch-loader" class="hidden flex-col gap-1.5 mt-1">
+                <div class="flex justify-between items-center text-[11px] font-mono text-zinc-400">
+                  <span>Querying Spotify Catalog...</span>
+                  <span id="genre-fetch-percentage">0%</span>
+                </div>
+                <div class="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
+                  <div id="genre-fetch-progress-bar" class="bg-spotify-green h-full w-0 transition-all duration-200"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Preview Lists with editable names -->
+          <div class="flex flex-col gap-3 mt-2">
+            <label class="text-xs font-bold uppercase tracking-wider text-zinc-400">Preview & Customize File Names</label>
+            <div id="split-previews" class="flex flex-col gap-2.5 max-h-72 overflow-y-auto scrollbar-thin pr-1">
+              <!-- Dynamically Generated -->
+            </div>
+          </div>
+
+          <!-- Run Split Execution Button -->
+          <button id="split-execute-btn" class="bg-spotify-green text-black font-black py-4 px-6 rounded-full text-base tracking-wide transition-all hover:scale-[1.01] mt-4 flex items-center justify-center gap-2 shadow-xl shadow-green-950/20">
+            <i class="fa-solid fa-file-zipper text-lg"></i>
+            <span>Process Split & Download ZIP Bundle</span>
+          </button>
+        </div>
+
+      </section>
+
+      <!-- SUCCESS DOWNLOAD STEP -->
+      <section id="step-success" class="hidden glass rounded-2xl p-6 md:p-8 flex flex-col gap-6 items-center text-center">
+        <div class="w-20 h-20 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center text-4xl text-green-400 mb-2">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <h3 class="text-xl font-black text-white">Splits Ready & Downloaded!</h3>
+          <p class="text-sm text-zinc-400 max-w-md">Your split files have been packaged into a single ZIP archive and downloaded directly to your device.</p>
+        </div>
+        
+        <div id="downloaded-list" class="w-full bg-zinc-950 rounded-xl p-4 border border-zinc-850 font-mono text-xs text-zinc-400 text-left flex flex-col gap-2 max-h-48 overflow-y-auto scrollbar-thin">
+          <!-- List of files contained inside ZIP -->
+        </div>
+
+        <button id="reset-app-btn" class="bg-zinc-900 hover:bg-zinc-850 text-white font-bold py-3 px-8 rounded-full text-xs border border-zinc-800 transition-all">
+          Upload and Split Another Playlist
+        </button>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="w-full bg-zinc-950/80 border-t border-zinc-900/60 py-6 px-4 text-center text-xs text-zinc-500">
+    <div class="max-w-xl mx-auto flex flex-col gap-1">
+      <p>This utility works entirely in your browser. None of your playlist data is ever sent to a server.</p>
+      <p class="text-[10px] text-zinc-600">Secure Client-Side CSV Processor • Current Date: June 3, 2026</p>
+    </div>
+  </footer>
+
+  <script>
+    // System Constants
+    const CLIENT_ID = 'fd818b98438c4553a8fa9175b11c6c1c';
+    const REDIRECT_URI = window.location.href.split('#')[0].split('?')[0];
+
+    const STATE = {
+      headers: [],
+      rows: [], // contains parsed raw row arrays
+      trackList: [], // Clean JSON format maps
+      splitMode: 'parts', // 'parts', 'size', 'artist', 'genre'
+      numSplits: 4,
+      maxSize: 50,
+      threshold: 2, // minimum songs of a group to qualify for independent file
+      filenamePrefix: 'Playlist',
+      
+      // Mapped indices of CSV
+      colArtistIdx: -1,
+      colTitleIdx: -1,
+      colUriIdx: -1,
+      colGenreIdx: -1,
+
+      // Online Metadata
+      accessToken: localStorage.getItem('splitify_api_token') || '',
+      expiresAt: parseInt(localStorage.getItem('splitify_api_expires')) || 0,
+      genreMap: {}, // mapping Artist Name/URI => main genre string
+
+      // Track personalized names manually typed by the user to avoid losing them during instant refreshes
+      customNames: {} 
+    };
+
+    // PKCE helper methods
+    function generateRandomString(length) {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      const values = crypto.getRandomValues(new Uint8Array(length));
+      return values.reduce((acc, x) => acc + possible[x % possible.length], "");
+    }
+    async function sha256(plain) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(plain);
+      return window.crypto.subtle.digest('SHA-256', data);
+    }
+    function base64urlencode(a) {
+      return btoa(String.fromCharCode.apply(null, new Uint8Array(a)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    // Connect to Spotify Web API (PKCE redirect)
+    document.getElementById('connect-spotify-btn').addEventListener('click', async () => {
+      const codeVerifier = generateRandomString(64);
+      localStorage.setItem('splitify_api_verifier', codeVerifier);
+
+      const hashed = await sha256(codeVerifier);
+      const codeChallenge = base64urlencode(hashed);
+
+      const scope = 'playlist-read-private';
+      const authUrl = new URL("https://accounts.spotify.com/authorize");
+
+      authUrl.search = new URLSearchParams({
+        response_type: 'code',
+        client_id: CLIENT_ID,
+        scope: scope,
+        code_challenge_method: 'S256',
+        code_challenge: codeChallenge,
+        redirect_uri: REDIRECT_URI
+      }).toString();
+
+      window.location.href = authUrl.toString();
+    });
+
+    // Check callback values
+    async function handleAuthCallback() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        const codeVerifier = localStorage.getItem('splitify_api_verifier');
+        try {
+          const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type: 'authorization_code',
+              code: code,
+              redirect_uri: REDIRECT_URI,
+              client_id: CLIENT_ID,
+              code_verifier: codeVerifier
+            })
+          });
+          const data = await res.json();
+          if (data.access_token) {
+            STATE.accessToken = data.access_token;
+            STATE.expiresAt = Date.now() + (data.expires_in * 1000);
+            localStorage.setItem('splitify_api_token', STATE.accessToken);
+            localStorage.setItem('splitify_api_expires', STATE.expiresAt);
+            await setupProfileBadge();
+          }
+        } catch(e) {
+          console.error("Token exchange failed", e);
+        }
+      } else if (STATE.accessToken && Date.now() < STATE.expiresAt) {
+        await setupProfileBadge();
+      }
+    }
+
+    async function setupProfileBadge() {
+      try {
+        const res = await fetch('https://api.spotify.com/v1/me', {
+          headers: { 'Authorization': `Bearer ${STATE.accessToken}` }
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          document.getElementById('user-avatar').src = profile.images?.[0]?.url || "https://placehold.co/40x40/121212/1DB954?text=SP";
+          document.getElementById('user-name').textContent = profile.display_name || "Spotify User";
+          document.getElementById('spotify-user-badge').classList.remove('hidden');
+          document.getElementById('spotify-user-badge').classList.add('flex');
+          
+          // Enable Spotify specific action buttons
+          const fetchBtn = document.getElementById('fetch-genres-btn');
+          fetchBtn.disabled = false;
+          fetchBtn.className = "bg-spotify-green hover:scale-[1.01] text-black font-bold py-2 px-4 rounded-lg text-xs transition-all flex items-center gap-1.5";
+          document.getElementById('genre-fetch-status-text').innerHTML = "Authorized &amp; ready to scan catalog";
+        } else {
+          // Token is dead
+          disconnectUser();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function disconnectUser() {
+      localStorage.removeItem('splitify_api_token');
+      localStorage.removeItem('splitify_api_expires');
+      STATE.accessToken = '';
+      STATE.expiresAt = 0;
+      document.getElementById('spotify-user-badge').classList.add('hidden');
+      location.reload();
+    }
+
+    document.getElementById('disconnect-api-btn').addEventListener('click', disconnectUser);
+
+    // Standard RFC 4180 compliant CSV parser to preserve quoting and comma logic perfectly
+    function parseCSV(text) {
+      const result = [];
+      let row = [];
+      let cell = '';
+      let insideQuote = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+
+        if (insideQuote) {
+          if (char === '"') {
+            if (nextChar === '"') {
+              cell += '"';
+              i++; // skip next quote
+            } else {
+              insideQuote = false;
+            }
+          } else {
+            cell += char;
+          }
+        } else {
+          if (char === '"') {
+            insideQuote = true;
+          } else if (char === ',') {
+            row.push(cell.trim());
+            cell = '';
+          } else if (char === '\n' || char === '\r') {
+            row.push(cell.trim());
+            if (row.length > 1 || row[0] !== '') {
+              result.push(row);
+            }
+            row = [];
+            cell = '';
+            // handle CRLF
+            if (char === '\r' && nextChar === '\n') {
+              i++;
+            }
+          } else {
+            cell += char;
+          }
+        }
+      }
+
+      if (cell !== '' || row.length > 0) {
+        row.push(cell.trim());
+        result.push(row);
+      }
+
+      return result;
+    }
+
+    function unparseCSV(headers, rows) {
+      const escapeField = (field) => {
+        const f = (field === null || field === undefined) ? '' : String(field);
+        if (f.includes('"') || f.includes(',') || f.includes('\n') || f.includes('\r')) {
+          return `"${f.replace(/"/g, '""')}"`;
+        }
+        return f;
+      };
+
+      const headerLine = headers.map(escapeField).join(',');
+      const rowLines = rows.map(r => r.map(escapeField).join(','));
+      return [headerLine, ...rowLines].join('\n');
+    }
+
+    // Set up Drag and Drop Handlers
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('csv-file-input');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    ['dragleave', 'dragend'].forEach(evt => {
+      dropZone.addEventListener(evt, () => {
+        dropZone.classList.remove('drag-over');
+      });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) {
+        handleFileSelection(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        handleFileSelection(e.target.files[0]);
+      }
+    });
+
+    function handleFileSelection(file) {
+      dropZone.querySelector('span.font-semibold').textContent = `Loaded: ${file.name}`;
+      const cleanName = file.name.replace(/\.[^/.]+$/, "");
+      STATE.filenamePrefix = cleanName;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        document.getElementById('csv-paste-area').value = evt.target.result;
+      };
+      reader.readAsText(file);
+    }
+
+    // Parse configuration & search metadata indexes
+    document.getElementById('load-csv-btn').addEventListener('click', () => {
+      hideError();
+      const csvText = document.getElementById('csv-paste-area').value.trim();
+
+      if (!csvText) {
+        showError("Please import a CSV file or paste some CSV contents above.");
+        return;
+      }
+
+      const spinner = document.getElementById('load-spinner');
+      const loadBtn = document.getElementById('load-csv-btn');
+      spinner.classList.remove('hidden');
+      loadBtn.disabled = true;
+
+      setTimeout(() => {
+        try {
+          const parsed = parseCSV(csvText);
+          if (parsed.length < 2) {
+            throw new Error("CSV must contain at least a header row and one row of track data.");
+          }
+
+          STATE.headers = parsed[0];
+          STATE.rows = parsed.slice(1);
+
+          // Reset user renames when importing a fresh file
+          STATE.customNames = {};
+
+          // Find critical column indexes (Case Insensitive Fuzzy Search)
+          const lowerHeaders = STATE.headers.map(h => h.toLowerCase());
+          STATE.colArtistIdx = lowerHeaders.findIndex(h => h.includes('artist') || h === 'creator');
+          STATE.colTitleIdx = lowerHeaders.findIndex(h => h.includes('track') || h.includes('title') || h === 'name' || h === 'song');
+          STATE.colUriIdx = lowerHeaders.findIndex(h => h.includes('uri') || h.includes('link') || h === 'id' || h.includes('url'));
+          STATE.colGenreIdx = lowerHeaders.findIndex(h => h.includes('genre') || h === 'style');
+
+          if (STATE.colArtistIdx === -1 && STATE.colTitleIdx === -1) {
+            throw new Error("Your CSV must include columns indicating either the 'Artist' or 'Track Name'.");
+          }
+
+          // Build clean Track List maps
+          STATE.trackList = STATE.rows.map((row, idx) => {
+            const rawArtist = STATE.colArtistIdx !== -1 ? row[STATE.colArtistIdx] : 'Unknown Artist';
+            const primaryArtist = rawArtist.split(',')[0].split(';')[0].trim();
+            
+            return {
+              rawRow: row,
+              index: idx,
+              title: STATE.colTitleIdx !== -1 ? row[STATE.colTitleIdx] : 'Unknown Track',
+              artist: primaryArtist,
+              artistFull: rawArtist,
+              uri: STATE.colUriIdx !== -1 ? row[STATE.colUriIdx] : '',
+              genre: STATE.colGenreIdx !== -1 ? row[STATE.colGenreIdx] : ''
+            };
+          });
+
+          // Unique artist count calculation
+          const artistsSet = new Set(STATE.trackList.map(t => t.artist));
+
+          // UI update
+          document.getElementById('meta-columns').textContent = STATE.headers.join(', ');
+          document.getElementById('meta-tracks').textContent = `${STATE.rows.length} records parsed`;
+          document.getElementById('meta-artists').textContent = `${artistsSet.size} unique artists`;
+
+          // Handle UI Drawer warning if Genre column is missing
+          if (STATE.colGenreIdx === -1) {
+            document.getElementById('genre-api-auth-card').classList.remove('hidden');
+            document.getElementById('genre-api-auth-card').classList.add('flex');
+          } else {
+            document.getElementById('genre-api-auth-card').classList.add('hidden');
+          }
+
+          document.getElementById('step-import').classList.add('hidden');
+          document.getElementById('playlist-workspace').classList.remove('hidden');
+          document.getElementById('playlist-workspace').classList.add('flex');
+
+          updateSplitsPreview();
+        } catch (err) {
+          showError(err.message || "Failed to process CSV. Ensure your data uses comma delimiters.");
+        } finally {
+          spinner.classList.add('hidden');
+          loadBtn.disabled = false;
+        }
+      }, 300);
+    });
+
+    // Fetch artist profiles in batches from Spotify API to query genres
+    async function querySpotifyArtistGenres() {
+      if (!STATE.accessToken) return;
+
+      const fetchBtn = document.getElementById('fetch-genres-btn');
+      const loader = document.getElementById('genre-fetch-loader');
+      const percentageEl = document.getElementById('genre-fetch-percentage');
+      const progressBar = document.getElementById('genre-fetch-progress-bar');
+      const statusText = document.getElementById('genre-fetch-status-text');
+
+      fetchBtn.disabled = true;
+      loader.classList.remove('hidden');
+      
+      // Collect unique artist names to search
+      const uniqueArtists = Array.from(new Set(STATE.trackList.map(t => t.artist))).filter(a => a && a !== 'Unknown Artist');
+      let completed = 0;
+
+      statusText.innerHTML = `Searching Spotify catalog for ${uniqueArtists.length} artists...`;
+
+      // We process query searches and cache matching genres
+      for (let i = 0; i < uniqueArtists.length; i++) {
+        const artistName = uniqueArtists[i];
+        if (STATE.genreMap[artistName]) {
+          completed++;
+          continue;
+        }
+
+        try {
+          // Spotify API Search Artist
+          const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent('artist:"' + artistName + '"')}&type=artist&limit=1`, {
+            headers: { 'Authorization': `Bearer ${STATE.accessToken}` }
+          });
+          
+          if (res.status === 429) {
+            // Respect rate limiting: wait 2 seconds and retry
+            i--;
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+
+          if (res.ok) {
+            const data = await res.json();
+            const artistObj = data.artists?.items?.[0];
+            if (artistObj && artistObj.genres && artistObj.genres.length > 0) {
+              const mapped = artistObj.genres.map(g => g.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
+              STATE.genreMap[artistName] = mapped[0]; 
+            } else {
+              STATE.genreMap[artistName] = 'Uncategorized';
+            }
+          }
+        } catch (e) {
+          console.error("Search API error", e);
+        }
+
+        completed++;
+        const pct = Math.round((completed / uniqueArtists.length) * 100);
+        percentageEl.textContent = `${pct}%`;
+        progressBar.style.width = `${pct}%`;
+      }
+
+      // Write Genre data into the track items
+      STATE.trackList.forEach(t => {
+        if (!t.genre) {
+          t.genre = STATE.genreMap[t.artist] || 'Uncategorized';
+        }
+      });
+
+      statusText.innerHTML = `<span class="text-green-400 font-bold">Successfully mapped artist genres!</span>`;
+      loader.classList.add('hidden');
+      updateSplitsPreview();
+    }
+
+    document.getElementById('fetch-genres-btn').addEventListener('click', querySpotifyArtistGenres);
+
+
+    // --- LAYOUT PARAMETERS CONTROLLERS & LIVE RE-CALCULATION LISTENERS ---
+    const selectButtons = document.querySelectorAll('.mode-select-btn');
+    const partsContainer = document.getElementById('container-parts-input');
+    const sizeContainer = document.getElementById('container-size-input');
+    const thresholdContainer = document.getElementById('container-threshold-input');
+    const spotifyContainer = document.getElementById('container-spotify-fetcher');
+
+    const splitSlider = document.getElementById('split-slider');
+    const splitDisplay = document.getElementById('slider-count-display');
+    const sizeInput = document.getElementById('tracks-limit');
+    const thresholdSlider = document.getElementById('threshold-slider');
+    const thresholdDisplay = document.getElementById('threshold-count-display');
+
+    // Switch config modes
+    function setActiveMode(mode) {
+      STATE.splitMode = mode;
+      
+      // Update Button Styles
+      selectButtons.forEach(btn => {
+        if (btn.id === `mode-${mode}-btn`) {
+          btn.className = "mode-select-btn py-2.5 text-[11px] md:text-xs font-bold rounded-lg transition-all bg-zinc-900 text-white border border-zinc-800";
+        } else {
+          btn.className = "mode-select-btn py-2.5 text-[11px] md:text-xs font-bold rounded-lg transition-all text-zinc-400 hover:text-zinc-200";
+        }
+      });
+
+      // Show/Hide relevant configuration elements
+      partsContainer.classList.add('hidden');
+      sizeContainer.classList.add('hidden');
+      thresholdContainer.classList.add('hidden');
+      spotifyContainer.classList.add('hidden');
+
+      if (mode === 'parts') {
+        partsContainer.classList.remove('hidden');
+      } else if (mode === 'size') {
+        sizeContainer.classList.remove('hidden');
+      } else if (mode === 'artist') {
+        thresholdContainer.classList.remove('hidden');
+      } else if (mode === 'genre') {
+        thresholdContainer.classList.remove('hidden');
+        if (STATE.colGenreIdx === -1) {
+          spotifyContainer.classList.remove('hidden');
+        }
+      }
+
+      // Re-trigger visual layout and computations
+      updateSplitsPreview();
+    }
+
+    // Mode Selector Click Triggers
+    selectButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.id.replace('mode-', '').replace('-btn', '');
+        setActiveMode(mode);
+      });
+    });
+
+    // 1. Slider: Split into exact N parts -> AUTO REFRESH ON INPUT
+    splitSlider.addEventListener('input', (e) => {
+      STATE.numSplits = parseInt(e.target.value);
+      splitDisplay.textContent = STATE.numSplits;
+      updateSplitsPreview();
+    });
+
+    // 2. Number: Split by track limits -> AUTO REFRESH ON TYPING & CLICKS
+    ['input', 'change', 'keyup'].forEach(evt => {
+      sizeInput.addEventListener(evt, (e) => {
+        let val = parseInt(e.target.value);
+        if (isNaN(val) || val < 1) val = 1;
+        STATE.maxSize = val;
+        updateSplitsPreview();
+      });
+    });
+
+    // 3. Slider: Threshold changes -> AUTO REFRESH ON INPUT
+    thresholdSlider.addEventListener('input', (e) => {
+      STATE.threshold = parseInt(e.target.value);
+      thresholdDisplay.textContent = `${STATE.threshold} ${STATE.threshold === 1 ? 'track' : 'tracks'}`;
+      updateSplitsPreview();
+    });
+
+
+    // Main chunking processor
+    function computeChunks() {
+      const totalTracks = STATE.trackList.length;
+      if (totalTracks === 0) return [];
+      
+      const chunks = [];
+
+      if (STATE.splitMode === 'parts') {
+        const size = Math.ceil(totalTracks / STATE.numSplits);
+        for (let i = 0; i < STATE.numSplits; i++) {
+          const start = i * size;
+          if (start >= totalTracks) break;
+          const end = Math.min(start + size, totalTracks);
+          const chunkTracks = STATE.trackList.slice(start, end);
+          chunks.push({
+            id: `parts-${i}`,
+            name: `${STATE.filenamePrefix}_Part_${i + 1}.csv`,
+            tracks: chunkTracks
+          });
+        }
+      } 
+      else if (STATE.splitMode === 'size') {
+        const size = STATE.maxSize;
+        let count = 1;
+        for (let i = 0; i < totalTracks; i += size) {
+          const chunkTracks = STATE.trackList.slice(i, i + size);
+          chunks.push({
+            id: `size-${count}`,
+            name: `${STATE.filenamePrefix}_Volume_${count}.csv`,
+            tracks: chunkTracks
+          });
+          count++;
+        }
+      } 
+      else if (STATE.splitMode === 'artist') {
+        const groups = {};
+        STATE.trackList.forEach(t => {
+          const key = t.artist || 'Unknown Artist';
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(t);
+        });
+
+        const mixedGroup = [];
+        Object.keys(groups).forEach(artist => {
+          const list = groups[artist];
+          if (list.length < STATE.threshold) {
+            mixedGroup.push(...list);
+          } else {
+            const safeName = artist.replace(/[\/\\?%*:|"<>]/g, '_');
+            chunks.push({
+              id: `artist-${safeName}`,
+              name: `${safeName}.csv`,
+              tracks: list
+            });
+          }
+        });
+
+        if (mixedGroup.length > 0) {
+          chunks.push({
+            id: 'artist-mixed',
+            name: `Mixed_Artists.csv`,
+            tracks: mixedGroup
+          });
+        }
+      } 
+      else if (STATE.splitMode === 'genre') {
+        const groups = {};
+        STATE.trackList.forEach(t => {
+          const key = t.genre || 'Uncategorized';
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(t);
+        });
+
+        const mixedGroup = [];
+        Object.keys(groups).forEach(genre => {
+          const list = groups[genre];
+          if (list.length < STATE.threshold) {
+            mixedGroup.push(...list);
+          } else {
+            const safeName = genre.replace(/[\/\\?%*:|"<>]/g, '_');
+            chunks.push({
+              id: `genre-${safeName}`,
+              name: `${safeName}.csv`,
+              tracks: list
+            });
+          }
+        });
+
+        if (mixedGroup.length > 0) {
+          chunks.push({
+            id: 'genre-mixed',
+            name: `Mixed_Genres.csv`,
+            tracks: mixedGroup
+          });
+        }
+      }
+
+      return chunks;
+    }
+
+
+    // Render preview screen with responsive auto-updates and name caching
+    function updateSplitsPreview() {
+      const chunks = computeChunks();
+      const container = document.getElementById('split-previews');
+      container.innerHTML = '';
+
+      if (chunks.length === 0) {
+        container.innerHTML = `<div class="text-xs text-zinc-500 text-center py-4">No groups parsed yet. Add your CSV source dataset.</div>`;
+        return;
+      }
+
+      chunks.forEach((chunk, index) => {
+        // Resolve either user-customized name cached previously, or fallback to default generated title
+        const currentName = STATE.customNames[chunk.id] || chunk.name;
+        
+        const card = document.createElement('div');
+        card.className = "bg-zinc-900/40 p-3 rounded-xl flex items-center justify-between border border-zinc-850 gap-4 transition-all duration-200 hover:border-zinc-700";
+        card.innerHTML = `
+          <div class="flex-grow flex flex-col gap-1 w-full">
+            <input type="text" value="${currentName}" data-chunk-id="${chunk.id}" class="split-name-input bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-green-500 focus:outline-none text-sm font-semibold text-white py-0.5 w-full font-mono">
+            <span class="text-[10px] text-zinc-500 font-mono">Contains ${chunk.tracks.length} matching entries</span>
+          </div>
+          <span class="text-[11px] bg-zinc-800 text-zinc-300 font-bold py-1 px-3 rounded-full whitespace-nowrap">${chunk.tracks.length} tracks</span>
+        `;
+        container.appendChild(card);
+      });
+
+      // Bind input events to inputs in the list to continuously save custom overrides
+      document.querySelectorAll('.split-name-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const chunkId = e.target.getAttribute('data-chunk-id');
+          STATE.customNames[chunkId] = e.target.value.trim();
+        });
+      });
+    }
+
+    // --- PROCESS EXPORTS AND DOWNLOAD ---
+    document.getElementById('split-execute-btn').addEventListener('click', async () => {
+      const chunks = computeChunks();
+      if (chunks.length === 0) return;
+
+      try {
+        const zip = new JSZip();
+        const outputListContainer = document.getElementById('downloaded-list');
+        outputListContainer.innerHTML = '';
+
+        chunks.forEach((chunk) => {
+          // Fall back to chunk.name if customNames does not exist
+          let fileName = STATE.customNames[chunk.id] || chunk.name;
+          if (!fileName.toLowerCase().endsWith('.csv')) {
+            fileName += '.csv';
+          }
+          
+          // Re-generate formatted CSV string for this chunk using raw rows
+          const rawRowsForChunk = chunk.tracks.map(t => t.rawRow);
+          const csvString = unparseCSV(STATE.headers, rawRowsForChunk);
+          
+          zip.file(fileName, csvString);
+
+          // Add a line entry in the final status screen
+          const line = document.createElement('div');
+          line.className = "flex justify-between items-center py-1 border-b border-zinc-900/40";
+          line.innerHTML = `
+            <span>📄 ${fileName}</span>
+            <span class="text-[10px] bg-zinc-900 px-2 py-0.5 rounded text-green-400 font-bold">${chunk.tracks.length} songs</span>
+          `;
+          outputListContainer.appendChild(line);
+        });
+
+        // Generate complete ZIP bundle
+        const contentBlob = await zip.generateAsync({ type: "blob" });
+        const zipFilename = `${STATE.filenamePrefix}_splits.zip`;
+
+        // Create browser trigger to download
+        const url = URL.createObjectURL(contentBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = zipFilename;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Cleanup memory
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Show Success Step
+        document.getElementById('playlist-workspace').classList.add('hidden');
+        document.getElementById('step-success').classList.remove('hidden');
+
+      } catch (e) {
+        console.error(e);
+        showError("ZIP generation failed. Please try again.");
+      }
+    });
+
+    // --- RESET RE-USE OPERATION ---
+    document.getElementById('reset-app-btn').addEventListener('click', () => {
+      document.getElementById('step-success').classList.add('hidden');
+      document.getElementById('csv-paste-area').value = '';
+      document.getElementById('drop-zone').querySelector('span.font-semibold').textContent = 'Drag & drop your playlist CSV file here';
+      document.getElementById('step-import').classList.remove('hidden');
+      
+      STATE.headers = [];
+      STATE.rows = [];
+      STATE.trackList = [];
+      STATE.filenamePrefix = 'Playlist';
+      STATE.customNames = {};
+      setActiveMode('parts');
+    });
+
+    // --- UI HELPERS ---
+    function showError(msg) {
+      const errBox = document.getElementById('api-error');
+      document.getElementById('error-message').textContent = msg;
+      errBox.classList.remove('hidden');
+    }
+    function hideError() {
+      document.getElementById('api-error').classList.add('hidden');
+    }
+
+    // System Startup
+    window.addEventListener('load', async () => {
+      await handleAuthCallback();
+    });
+  </script>
+</body>
+</html>
